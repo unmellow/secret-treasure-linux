@@ -20,8 +20,6 @@ if ! pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
   exit 1
 fi
 
-# FUSE: linuxdeploy/appimagetool are themselves AppImages.
-# RELR: linuxdeploy's ancient strip cannot parse Arch binutils output.
 export APPIMAGE_EXTRACT_AND_RUN=1
 export NO_STRIP=true
 export ARCH="${ARCH:-x86_64}"
@@ -31,6 +29,10 @@ BUNDLE="${1:-appimage}"
 if [[ "$BUNDLE" == "appimage" ]]; then
   echo "Building AppImage (NO_STRIP=1, APPIMAGE_EXTRACT_AND_RUN=1)…"
   if cargo tauri build --bundles appimage; then
+    echo
+    echo "Patching AppImage audio (host GStreamer / PipeWire)…"
+    chmod +x ./fix-appimage-audio.sh
+    ./fix-appimage-audio.sh || echo "Audio patch failed — ELF still has sound: target/release/secret-treasure"
     echo
     echo "AppImage:"
     ls -lh target/release/bundle/appimage/*.AppImage 2>/dev/null || true
@@ -48,8 +50,3 @@ echo "Native binary: $BIN"
 ls -lh "$BIN"
 echo
 echo "Run:  $(pwd)/$BIN"
-echo
-echo "Retry AppImage after:"
-echo "  sudo pacman -S --needed fuse2"
-echo "  sudo chmod u+s \"\$(command -v fusermount)\""
-echo "  ./build-linux.sh appimage"
