@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# AppImage-only audio fix.
-# linuxdeploy's GTK hook exports GST_PLUGIN_SYSTEM_PATH_1_0 into an empty
-# $APPDIR/usr/lib/gstreamer-1.0 (bundleMediaFramework is false). That hides
-# the host GStreamer plugins, so WebKit WebAudio is silent. The ELF binary
-# does not set that variable, which is why it has sound.
+# Patch an already-built AppImage so AppRun cannot point GStreamer at an
+# empty bundled plugin dir. Prefer rebuilding so the ELF unsets these itself.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -35,50 +32,51 @@ if [[ ! -f "$ROOT/AppRun" ]]; then
   exit 1
 fi
 
-mkdir -p "$ROOT/apprun-hooks"
-cat > "$ROOT/apprun-hooks/zzz-host-audio.sh" <<'HOOK'
-# Prefer the machine's GStreamer / PipeWire. The bundled plugin dir is empty.
-unset GST_PLUGIN_SYSTEM_PATH
-unset GST_PLUGIN_SYSTEM_PATH_1_0
-unset GST_PLUGIN_PATH
-unset GST_PLUGIN_PATH_1_0
-unset GST_PLUGIN_SCANNER
-unset GST_PLUGIN_SCANNER_1_0
+# Insert immediately before every exec so it cannot run after the binary starts.
+python3 - "$ROOT/AppRun" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+text = p.read_text(errors="replace")
+snippet = """# host audio: do not use empty bundled GStreamer dir
+unset GST_PLUGIN_SYSTEM_PATH GST_PLUGIN_SYSTEM_PATH_1_0
+unset GST_PLUGIN_PATH GST_PLUGIN_PATH_1_0
+unset GST_PLUGIN_SCANNER GST_PLUGIN_SCANNER_1_0
 export WEBKIT_DISABLE_SANDBOX=1
 export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+if [ -d /usr/lib/gstreamer-1.0 ]; then
+  export GST_PLUGIN_SYSTEM_PATH_1_0=/usr/lib/gstreamer-1.0
+elif [ -d /usr/lib64/gstreamer-1.0 ]; then
+  export GST_PLUGIN_SYSTEM_PATH_1_0=/usr/lib64/gstreamer-1.0
+fi
 if [ -z "${PULSE_SERVER:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -S "$XDG_RUNTIME_DIR/pulse/native" ]; then
   export PULSE_SERVER="unix:$XDG_RUNTIME_DIR/pulse/native"
 fi
-HOOK
+"""
+if "host audio: do not use empty bundled GStreamer dir" not in text:
+    import re
+    text2, n = re.subn(r"^exec ", snippet + "exec ", text, count=1, flags=re.M)
+    if n == 0:
+        text2 = text.rstrip() + "\n" + snippet
+    p.write_text(text2)
+    print("patched AppRun exec")
+else:
+    print("AppRun already patched")
+PY
 
-# GTK hook often sets GST_* and GDK_BACKEND=x11 — neutralize those lines.
-if [[ -d "$ROOT/apprun-hooks" ]]; then
-  sed -i \
+# Neutralize GST exports in hooks
+find "$ROOT" -type f \( -name 'AppRun*' -o -path '*/apprun-hooks/*' \) -print0 \
+  | xargs -0 sed -i \
     -e 's/^export GST_PLUGIN_SYSTEM_PATH/# &/' \
     -e 's/^export GST_PLUGIN_PATH/# &/' \
     -e 's/^export GST_PLUGIN_SCANNER/# &/' \
     -e 's/^export GDK_BACKEND=x11/# &/' \
-    "$ROOT/apprun-hooks"/* 2>/dev/null || true
-fi
+    2>/dev/null || true
 
-# AppRun itself may export GST_*. Append our unset so it wins.
-if ! grep -q 'zzz-host-audio' "$ROOT/AppRun"; then
-  {
-    echo
-    echo '# host audio — sourced last'
-    echo '. "$APPDIR/apprun-hooks/zzz-host-audio.sh"'
-  } >> "$ROOT/AppRun"
-fi
-
-# Do not shadow host PipeWire with a bundled Pulse client.
-find "$ROOT" -type f \( \
-  -name 'libpulse*' -o -name 'libpipewire*' -o -name 'libspa-0.2*' \
-  \) -delete 2>/dev/null || true
+find "$ROOT" -type f \( -name 'libpulse*' -o -name 'libpipewire*' -o -name 'libspa-0.2*' \) -delete 2>/dev/null || true
 
 OUT="${AI%.AppImage}-audio.AppImage"
-if [[ "$OUT" == "$AI" ]]; then
-  OUT="${AI}.audio"
-fi
+if [[ "$OUT" == "$AI" ]]; then OUT="${AI}.audio"; fi
 
 TOOL=""
 for c in appimagetool appimagetool-x86_64.AppImage; do
@@ -103,4 +101,8 @@ export APPIMAGE_EXTRACT_AND_RUN=1 ARCH="${ARCH:-x86_64}"
 "$TOOL" "$ROOT" "$OUT"
 chmod +x "$OUT"
 echo "Patched AppImage: $OUT"
-echo "Run:  $OUT"
+echo
+echo "If that is still silent, skip AppImage and use the ELF:"
+echo "  target/release/secret-treasure"
+echo "Or run the extracted tree (no FUSE):"
+echo "  APPIMAGE_EXTRACT_AND_RUN=1 $OUT"

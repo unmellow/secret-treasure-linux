@@ -1,28 +1,49 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
-    {
-        // WebKitGTK's bubblewrap sandbox blocks Pulse/PipeWire, so Unity
-        // WebAudio is silent. Only set these if the user has not already.
-        for (k, v) in [
-            ("WEBKIT_DISABLE_SANDBOX", "1"),
-            ("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1"),
-        ] {
-            if std::env::var_os(k).is_none() {
-                unsafe { std::env::set_var(k, v) };
-            }
-        }
-        if std::env::var_os("PULSE_SERVER").is_none() {
-            if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
-                let native = format!("{dir}/pulse/native");
-                if std::path::Path::new(&native).exists() {
-                    unsafe { std::env::set_var("PULSE_SERVER", format!("unix:{native}")) };
-                }
-            }
-        }
-    }
+    linux_audio_env();
 
     tauri::Builder::default()
         .run(tauri::generate_context!())
         .expect("error while running Secret Treasure");
+}
+
+#[cfg(target_os = "linux")]
+fn linux_audio_env() {
+    // AppImage AppRun (linuxdeploy GTK hook) exports
+    // GST_PLUGIN_SYSTEM_PATH_1_0=$APPDIR/usr/lib/gstreamer-1.0 which does not
+    // exist when bundleMediaFramework is false. That hides host plugins and
+    // mutes WebKit. The ELF never sets these, so it has sound.
+    for k in [
+        "GST_PLUGIN_SYSTEM_PATH",
+        "GST_PLUGIN_SYSTEM_PATH_1_0",
+        "GST_PLUGIN_PATH",
+        "GST_PLUGIN_PATH_1_0",
+        "GST_PLUGIN_SCANNER",
+        "GST_PLUGIN_SCANNER_1_0",
+    ] {
+        unsafe { std::env::remove_var(k) };
+    }
+    if std::path::Path::new("/usr/lib/gstreamer-1.0").is_dir() {
+        unsafe { std::env::set_var("GST_PLUGIN_SYSTEM_PATH_1_0", "/usr/lib/gstreamer-1.0") };
+    } else if std::path::Path::new("/usr/lib64/gstreamer-1.0").is_dir() {
+        unsafe { std::env::set_var("GST_PLUGIN_SYSTEM_PATH_1_0", "/usr/lib64/gstreamer-1.0") };
+    }
+
+    for (k, v) in [
+        ("WEBKIT_DISABLE_SANDBOX", "1"),
+        ("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1"),
+    ] {
+        unsafe { std::env::set_var(k, v) };
+    }
+
+    if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
+        let pulse = format!("{dir}/pulse/native");
+        if std::env::var_os("PULSE_SERVER").is_none() && std::path::Path::new(&pulse).exists() {
+            unsafe { std::env::set_var("PULSE_SERVER", format!("unix:{pulse}")) };
+        }
+        if std::path::Path::new(&format!("{dir}/pipewire-0")).exists() {
+            unsafe { std::env::set_var("PIPEWIRE_RUNTIME_DIR", &dir) };
+        }
+    }
 }
