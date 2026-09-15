@@ -2,8 +2,8 @@
 <html lang="en-us">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Secret Treasure</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Secret Treasure (offline fork)</title>
     <style>
       html,
       body {
@@ -24,34 +24,42 @@
         width: 996px;
         height: 666px;
         transform-origin: center center;
+        flex: none;
+      }
+      #unityContainer canvas {
+        display: block;
+        width: 996px !important;
+        height: 666px !important;
       }
     </style>
+    <script src="clicks.js"></script>
     <script src="Build/UnityLoader.js"></script>
+    <script src="fork.js"></script>
   </head>
   <body>
     <div id="stage">
       <div id="unityContainer"></div>
     </div>
     <script>
-      UnityLoader.instantiate("unityContainer", "Build/build.json");
-      function fit() {
-        var el = document.getElementById("unityContainer");
-        var s = Math.min(window.innerWidth / 996, window.innerHeight / 666);
-        el.style.transform = "scale(" + s + ")";
+      var gameInstance = UnityLoader.instantiate(
+        "unityContainer",
+        "Build/build.json"
+      );
+      if (window.SecretTreasureFork) {
+        SecretTreasureFork.attachUnity(gameInstance);
       }
-      window.addEventListener("resize", fit);
-      fit();
+      window.addEventListener("resize", window.stFitGame);
+      window.stFitGame();
 
-      // WebKitGTK / autoplay: Unity WebAudio stays suspended until a gesture.
       function unlockAudio() {
         try {
-          if (typeof WEBAudio !== "undefined" && WEBAudio.audioContext && WEBAudio.audioContext.resume) {
+          if (
+            typeof WEBAudio !== "undefined" &&
+            WEBAudio.audioContext &&
+            WEBAudio.audioContext.resume
+          ) {
             WEBAudio.audioContext.resume();
           }
-        } catch (e) {}
-        try {
-          var AC = window.AudioContext || window.webkitAudioContext;
-          if (!AC) return;
         } catch (e) {}
       }
       window.addEventListener("pointerdown", unlockAudio, true);
