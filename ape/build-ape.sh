@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pack Secret Treasure into a Cosmopolitan Actually Portable Executable
-# (redbean). One file runs on Linux, Windows, macOS, and BSD.
+# (redbean). Always starts from a fresh redbean so old zip entries cannot
+# shadow updated index.html / clicks.js.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GAME="$ROOT/public/game"
@@ -17,17 +18,19 @@ fetch() {
   curl -fL --retry 3 -o "$dest" "$url" || curl -fkL --retry 3 -o "$dest" "$url"
 }
 
-if ! command -v zip >/dev/null 2>&1; then
+ZIP=""
+if command -v zip >/dev/null 2>&1; then
+  ZIP="$(command -v zip)"
+else
   echo "Fetching Cosmopolitan zip…"
   fetch "$ZIP_URL" "$STAGE/zip.com"
   chmod +x "$STAGE/zip.com"
   ZIP="$STAGE/zip.com"
-else
-  ZIP="$(command -v zip)"
 fi
 
 echo "Fetching redbean…"
 fetch "$REDBEAN_URL" "$STAGE/redbean.com"
+rm -f "$OUT"
 cp "$STAGE/redbean.com" "$OUT"
 chmod +x "$OUT"
 
@@ -35,12 +38,10 @@ python3 - "$GAME" "$STAGE/assets" <<'PY'
 import gzip, pathlib, shutil, sys
 src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 (dst / "Build").mkdir(parents=True)
-shutil.copy2(src / "index.html", dst / "index.html")
-shutil.copy2(src / ".init.lua", dst / ".init.lua")
+for name in ("index.html", ".init.lua", "clicks.js", "fork.js"):
+    shutil.copy2(src / name, dst / name)
 shutil.copy2(src / "Build" / "UnityLoader.js", dst / "Build" / "UnityLoader.js")
 shutil.copy2(src / "Build" / "build.json", dst / "Build" / "build.json")
-# Gunzip Unity payloads so redbean can zip-deflate them and the browser
-# will decode Content-Encoding: gzip into raw wasm/data (Unity identity path).
 for name in (
     "build.data.unityweb",
     "build.wasm.code.unityweb",
@@ -52,13 +53,26 @@ PY
 
 (
   cd "$STAGE/assets"
-  "$ZIP" -r -9 "$OUT" index.html .init.lua Build
+  "$ZIP" -r -9 "$OUT" index.html .init.lua clicks.js fork.js Build
 )
 "$ZIP" -A "$OUT" >/dev/null 2>&1 || true
 chmod +x "$OUT"
+
+python3 - "$OUT" <<'PY'
+import zipfile, sys
+z = zipfile.ZipFile(sys.argv[1])
+names = z.namelist()
+need = ["index.html", "clicks.js", "fork.js", ".init.lua", "Build/build.json"]
+missing = [n for n in need if n not in names]
+if missing:
+    raise SystemExit("APE zip missing: " + ", ".join(missing))
+# First listing of index.html must be the one we just added (no stale copy).
+print("APE zip entries:", len(names))
+print("index.html count:", names.count("index.html"))
+print("clicks.js count:", names.count("clicks.js"))
+PY
+
 echo "Built $OUT ($(wc -c < "$OUT") bytes)"
 echo
-echo "Linux / macOS / BSD:  chmod +x $OUT && ./$OUT"
-echo "If exec fails:        sh $OUT"
-echo "Windows:              rename to secret-treasure.exe and double-click"
-echo "Listens on http://127.0.0.1:19996/ and opens a browser."
+echo "Linux:  chmod +x $OUT && sh $OUT"
+echo "Listens on http://127.0.0.1:19996/"
