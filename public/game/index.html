@@ -20,29 +20,16 @@
         align-items: center;
         justify-content: center;
       }
-      #st-frame {
-        position: relative;
-        flex: none;
-        overflow: hidden;
-      }
       #unityContainer {
         width: 996px;
         height: 666px;
-        transform-origin: 0 0;
-        pointer-events: none;
+        transform-origin: center center;
+        flex: none;
       }
       #unityContainer canvas {
         display: block;
         width: 996px !important;
         height: 666px !important;
-        pointer-events: none;
-      }
-      #st-hit {
-        position: absolute;
-        inset: 0;
-        z-index: 5;
-        touch-action: none;
-        cursor: pointer;
       }
     </style>
     <script src="clicks.js"></script>
@@ -51,10 +38,7 @@
   </head>
   <body>
     <div id="stage">
-      <div id="st-frame">
-        <div id="unityContainer"></div>
-        <div id="st-hit" aria-hidden="true"></div>
-      </div>
+      <div id="unityContainer"></div>
     </div>
     <script>
       var gameInstance = UnityLoader.instantiate(

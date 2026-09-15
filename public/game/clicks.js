@@ -1,46 +1,96 @@
-/* Scale the Unity canvas visually, but never let Unity see scaled mouse
- * coordinates. Unity 2019 uGUI does `clientX - canvas.getBoundingClientRect().left`
- * and treats that as a 996×666 pixel. CSS transform/zoom/width all break that.
- *
- * Hit layer sits on the *visible* scaled frame. We convert the pointer into
- * game pixels (0–996, 0–666) and dispatch a mouse event at
- *   canvasRect.left + gameX
- * so Unity's subtraction yields gameX.
+/* Unity 2019 has two mouse paths:
+ *   fillMouseEventData:  clientX - rect.left                  (NO scale)
+ *   calculateMouseEvent: (pageX - scroll - rect.left) * (cw / rect.width)
+ * CSS transform makes those disagree. Fake the canvas rect as 996×666 at the
+ * visual origin, and rewrite clientX/pageX into that space so BOTH equal
+ * game pixels.
  */
 (function () {
   var W = 996;
   var H = 666;
+  var origBCR = Element.prototype.getBoundingClientRect;
 
   function canvasEl() {
     return document.querySelector("#unityContainer canvas");
   }
 
-  function gameFromEvent(e) {
-    var hit = document.getElementById("st-hit");
-    var r = hit.getBoundingClientRect();
-    var x = ((e.clientX - r.left) / r.width) * W;
-    var y = ((e.clientY - r.top) / r.height) * H;
-    if (x < 0) x = 0;
-    if (y < 0) y = 0;
-    if (x > W) x = W;
-    if (y > H) y = H;
-    return { x: x, y: y };
+  function visualRect(el) {
+    return origBCR.call(el);
   }
 
-  function send(type, e) {
+  Element.prototype.getBoundingClientRect = function () {
+    var r = origBCR.call(this);
+    var canvas = canvasEl();
+    if (!canvas || this !== canvas) return r;
+    var gw = canvas.width >= 500 ? canvas.width : W;
+    var gh = canvas.height >= 400 ? canvas.height : H;
+    return new DOMRect(r.left, r.top, gw, gh);
+
+  };
+
+  function remapEvent(e, canvas) {
+    var visual = visualRect(canvas);
+    if (!visual.width || !visual.height) return false;
+    var sx = (canvas.width>=500?canvas.width:W) / visual.width;
+    var sy = (canvas.height>=400?canvas.height:H) / visual.height;
+    var nx = visual.left + (e.clientX - visual.left) * sx;
+    var ny = visual.top + (e.clientY - visual.top) * sy;
+    var npx = nx + (window.scrollX || 0);
+    var npy = ny + (window.scrollY || 0);
+    try {
+      Object.defineProperty(e, "clientX", { get: function () { return nx; }, configurable: true });
+      Object.defineProperty(e, "clientY", { get: function () { return ny; }, configurable: true });
+      Object.defineProperty(e, "pageX", { get: function () { return npx; }, configurable: true });
+      Object.defineProperty(e, "pageY", { get: function () { return npy; }, configurable: true });
+      e.__stFixed = true;
+      record(e, canvas, sx);
+      return true;
+    } catch (err) {
+      return { nx: nx, ny: ny, npx: npx, npy: npy, sx: sx, sy: sy };
+    }
+  }
+
+  function record(e, canvas, sx) {
+    var r = canvas.getBoundingClientRect();
+    var fillX = e.clientX - r.left;
+    var fillY = e.clientY - r.top;
+    var calcX = fillX * ((canvas.width>=500?canvas.width:W) / (r.width || 1));
+    var calcY = fillY * ((canvas.height>=400?canvas.height:H) / (r.height || 1));
+    window.__stLastClick = {
+      fillX: fillX,
+      fillY: fillY,
+      calcX: calcX,
+      calcY: calcY,
+      scale: sx,
+      rectW: r.width,
+      canvasW: canvas.width
+    };
+  }
+
+  function intercept(e) {
+    if (e.__stFixed) return;
     var canvas = canvasEl();
     if (!canvas) return;
-    var g = gameFromEvent(e);
-    var cr = canvas.getBoundingClientRect();
-    var clientX = cr.left + g.x;
-    var clientY = cr.top + g.y;
-    var ev = new MouseEvent(type, {
+    var t = e.target;
+    if (t !== canvas && !(t && t.closest && t.closest("#unityContainer"))) return;
+    var visual = visualRect(canvas);
+    var sx = (canvas.width>=500?canvas.width:W) / (visual.width || 1);
+    if (Math.abs(sx - 1) < 0.002 && Math.abs((canvas.height>=400?canvas.height:H) / (visual.height || 1) - 1) < 0.002) {
+      record(e, canvas, 1);
+      return;
+    }
+    var mapped = remapEvent(e, canvas);
+    if (mapped === true) return;
+    if (!mapped) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    var init = {
       bubbles: true,
       cancelable: true,
       view: window,
-      detail: type === "mousedown" ? 1 : 0,
-      clientX: clientX,
-      clientY: clientY,
+      detail: e.detail || 0,
+      clientX: mapped.nx,
+      clientY: mapped.ny,
       screenX: e.screenX,
       screenY: e.screenY,
       ctrlKey: e.ctrlKey,
@@ -48,88 +98,36 @@
       shiftKey: e.shiftKey,
       metaKey: e.metaKey,
       button: e.button || 0,
-      buttons: e.buttons || (type === "mouseup" ? 0 : 1)
-    });
-    canvas.dispatchEvent(ev);
-    window.__stLastClick = {
-      type: type,
-      gameX: g.x,
-      gameY: g.y,
-      unityX: clientX - cr.left,
-      unityY: clientY - cr.top,
-      scale: cr.width / W
+      buttons: e.buttons || 0
     };
+    var ne;
+    if (e.type === "wheel" && typeof WheelEvent === "function") {
+      ne = new WheelEvent("wheel", Object.assign({}, init, { deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode }));
+    } else {
+      ne = new MouseEvent(e.type, init);
+    }
+    ne.__stFixed = true;
+    record(ne, canvas, mapped.sx);
+    canvas.dispatchEvent(ne);
   }
+
+  ["mousedown", "mouseup", "mousemove", "click", "dblclick", "wheel", "contextmenu"].forEach(function (type) {
+    window.addEventListener(type, intercept, true);
+  });
 
   window.stFitGame = function () {
-    var frame = document.getElementById("st-frame");
     var box = document.getElementById("unityContainer");
-    if (!frame || !box) return;
+    if (!box) return;
     var s = Math.min(window.innerWidth / W, window.innerHeight / H);
     if (!isFinite(s) || s <= 0) s = 1;
-    frame.style.width = W * s + "px";
-    frame.style.height = H * s + "px";
-    box.style.transform = "scale(" + s + ")";
+    box.style.transform = s === 1 ? "none" : "scale(" + s + ")";
   };
 
-  function bindHit() {
-    var hit = document.getElementById("st-hit");
-    if (!hit || hit.__stBound) return;
-    hit.__stBound = true;
-    var map = {
-      pointerdown: "mousedown",
-      pointermove: "mousemove",
-      pointerup: "mouseup"
-    };
-    Object.keys(map).forEach(function (src) {
-      hit.addEventListener(
-        src,
-        function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          send(map[src], e);
-        },
-        { capture: true, passive: false }
-      );
-    });
-    hit.addEventListener(
-      "wheel",
-      function (e) {
-        var canvas = canvasEl();
-        if (!canvas) return;
-        e.preventDefault();
-        e.stopPropagation();
-        var g = gameFromEvent(e);
-        var cr = canvas.getBoundingClientRect();
-        var wev = new WheelEvent("wheel", {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-          clientX: cr.left + g.x,
-          clientY: cr.top + g.y,
-          deltaX: e.deltaX,
-          deltaY: e.deltaY,
-          deltaMode: e.deltaMode
-        });
-        canvas.dispatchEvent(wev);
-      },
-      { capture: true, passive: false }
-    );
-    hit.addEventListener("contextmenu", function (e) {
-      e.preventDefault();
-    });
-  }
-
   function ready(fn) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", fn);
-    } else {
-      fn();
-    }
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+    else fn();
   }
-
   ready(function () {
-    bindHit();
     window.stFitGame();
     window.addEventListener("resize", window.stFitGame);
   });
