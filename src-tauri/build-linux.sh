@@ -14,8 +14,9 @@ if ! command -v cargo-tauri >/dev/null && ! cargo tauri --version >/dev/null 2>&
 fi
 
 if ! pkg-config --exists webkit2gtk-4.1 2>/dev/null; then
-  echo "Missing webkit2gtk-4.1. On Debian/Ubuntu:"
-  echo "  sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf"
+  echo "Missing webkit2gtk-4.1."
+  echo "  Manjaro/Arch: sudo pacman -S --needed webkit2gtk-4.1 gtk3 librsvg patchelf base-devel"
+  echo "  Debian/Ubuntu: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf"
   exit 1
 fi
 

@@ -18,8 +18,33 @@ Native resolution is **996 × 666**. The desktop window is 996 × 700 so the tit
 
 Needs Rust, Tauri CLI 2, and WebKitGTK 4.1.
 
+### Manjaro (and other Arch-based)
+
 ```bash
-# Debian / Ubuntu
+sudo pacman -Syu --needed \
+  webkit2gtk-4.1 gtk3 librsvg patchelf \
+  base-devel curl wget file openssl \
+  appmenu-gtk-module libappindicator-gtk3 xdg-utils
+
+# Rust toolchain (rustup tracks stable; skip if `rustc` is already recent)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+cargo install tauri-cli --locked --version "^2"
+
+git clone https://github.com/unmellow/secret-treasure-linux.git
+cd secret-treasure-linux/src-tauri
+chmod +x build-linux.sh
+./build-linux.sh
+./target/release/secret-treasure
+```
+
+`pamac` equivalent: **Add/Remove Software** → install `webkit2gtk-4.1`, `gtk3`, `librsvg`, `patchelf`, `base-devel`.
+
+If `pkg-config` cannot find `webkit2gtk-4.1`, you grabbed the older `webkit2gtk` (4.0) package. You need **`webkit2gtk-4.1`**.
+
+### Debian / Ubuntu
+
+```bash
 sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install tauri-cli --locked --version "^2"
