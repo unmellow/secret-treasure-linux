@@ -22,4 +22,6 @@ panic = "abort"
 codegen-units = 1
 lto = true
 opt-level = "s"
-strip = true
+# linuxdeploy's bundled strip cannot parse RELR sections on Arch/Manjaro.
+# Leave symbols; the AppImage tool strips later when NO_STRIP is unset.
+strip = false
