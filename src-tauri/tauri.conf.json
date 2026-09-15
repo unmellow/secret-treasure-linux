@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Secret Treasure",
+  "version": "0.8.0",
+  "identifier": "net.relatedguy.secrettreasure",
+  "build": {
+    "frontendDist": "../public/game"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Secret Treasure",
+        "width": 996,
+        "height": 700,
+        "minWidth": 480,
+        "minHeight": 360,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "backgroundColor": "#231F20"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' asset: https://asset.localhost; script-src 'self' 'unsafe-eval' 'unsafe-inline' asset: https://asset.localhost blob:; worker-src 'self' blob:; connect-src 'self' asset: https://asset.localhost blob: data:; img-src 'self' data: blob: asset: https://asset.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src 'self' blob: asset: https://asset.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.png"
+    ]
+  }
+}

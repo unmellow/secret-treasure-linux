@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Secret Treasure</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #231f20;
+        overflow: hidden;
+      }
+      #stage {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #unityContainer {
+        width: 996px;
+        height: 666px;
+        transform-origin: center center;
+      }
+    </style>
+    <script src="Build/UnityLoader.js"></script>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="unityContainer"></div>
+    </div>
+    <script>
+      UnityLoader.instantiate("unityContainer", "Build/2021-06-16 build.json");
+      function fit() {
+        var el = document.getElementById("unityContainer");
+        var s = Math.min(window.innerWidth / 996, window.innerHeight / 666);
+        el.style.transform = "scale(" + s + ")";
+      }
+      window.addEventListener("resize", fit);
+      fit();
+    </script>
+  </body>
+</html>
