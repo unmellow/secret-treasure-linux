@@ -2,50 +2,68 @@
 
 Offline copy of **Secret Treasure** 0.8 (Relatedguy, Unity 2019.4 WebGL).
 
-The playable artifact is a [Cosmopolitan](https://github.com/jart/cosmopolitan) **Actually Portable Executable** built with [redbean](https://redbean.dev/): one file that is both a zip archive and a native program for Linux, Windows, macOS, FreeBSD, OpenBSD, and NetBSD (AMD64 + ARM64).
+## Portable APE (Cosmopolitan / redbean)
 
-## Download
+Download **v0.8.2**: https://github.com/unmellow/secret-treasure-linux/releases/tag/v0.8.2
 
-Release asset: `secret-treasure.com` (~24 MB)
+### Linux (Manjaro / Arch) — do not run the `.com` directly if Wine is installed
 
-https://github.com/unmellow/secret-treasure-linux/releases
+Wine registers a kernel binfmt for every `MZ` file. Cosmopolitan APE binaries start with `MZ`, so `./secret-treasure.com` is stolen by Wine. You then see:
 
-## Run
+- `fixme:ntdll:RtlGetCurrentProcessorNumberEx`
+- `Socket operation on non-socket`
+- Firefox `NS_ERROR_NET_EMPTY_RESPONSE` / empty page on `http://127.0.0.1:19996`
 
-```bash
-chmod +x secret-treasure.com
-./secret-treasure.com
-```
-
-If the kernel will not exec APE binaries:
+**Fix — start it through the shell polyglot:**
 
 ```bash
+chmod +x secret-treasure secret-treasure.com
+./secret-treasure
+# or:
 sh ./secret-treasure.com
 ```
 
-Windows: rename to `secret-treasure.exe` and double-click.
+One-time conversion to a real Linux ELF (Wine will then ignore it):
 
-It binds **http://127.0.0.1:19996/** and opens a browser. Needs a browser with WebGL (any current Chrome / Firefox / Edge). No WebKitGTK, no FUSE, no AppImage.
+```bash
+sh ./secret-treasure.com --assimilate
+./secret-treasure.com
+```
 
-Stop with Ctrl+C.
+After `--assimilate` the file is Linux-only.
+
+It binds **http://127.0.0.1:19996/** and opens a browser. Ctrl+C stops it.
+
+Windows: rename `secret-treasure.com` to `secret-treasure.exe`.
+
+## Tauri window (optional) + audio
+
+WebKitGTK sandboxes the web process and that **mutes Unity WebAudio** (Pulse/PipeWire sockets are blocked). The binary now sets:
+
+```
+WEBKIT_DISABLE_SANDBOX=1
+WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+```
+
+Rebuild:
+
+```bash
+sudo pacman -S --needed \
+  webkit2gtk-4.1 gtk3 librsvg patchelf base-devel fuse2 \
+  gst-plugins-base gst-plugins-good gst-libav gst-plugin-pipewire
+
+cd src-tauri
+./build-linux.sh
+WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 ./target/release/secret-treasure
+```
+
+Click once in the game window so the audio context can resume.
+
+AppImage on Manjaro is still the fragile path (linuxdeploy + RELR). Prefer the ELF or the APE.
 
 ## Rebuild the APE
 
 ```bash
-# needs curl + python3; zip comes from the OS or Cosmopolitan
 chmod +x ape/build-ape.sh
 ./ape/build-ape.sh
-```
-
-The script gunzips the Unity `.unityweb` payloads, then zip-deflates them into redbean so the browser sees `Content-Encoding: gzip` and Unity receives raw wasm/data.
-
-## Tauri (optional, Linux-native window)
-
-See `src-tauri/`. AppImage bundling is unreliable on Manjaro/Arch; the ELF `src-tauri/target/release/secret-treasure` is enough if you already have WebKitGTK. The APE path above is the portable one.
-
-## Browser, no compile
-
-```bash
-chmod +x run-web.sh
-./run-web.sh
 ```

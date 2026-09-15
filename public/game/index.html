@@ -41,6 +41,21 @@
       }
       window.addEventListener("resize", fit);
       fit();
+
+      // WebKitGTK / autoplay: Unity WebAudio stays suspended until a gesture.
+      function unlockAudio() {
+        try {
+          if (typeof WEBAudio !== "undefined" && WEBAudio.audioContext && WEBAudio.audioContext.resume) {
+            WEBAudio.audioContext.resume();
+          }
+        } catch (e) {}
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+        } catch (e) {}
+      }
+      window.addEventListener("pointerdown", unlockAudio, true);
+      window.addEventListener("keydown", unlockAudio, true);
     </script>
   </body>
 </html>
