@@ -30,12 +30,9 @@ fn linux_audio_env() {
         unsafe { std::env::set_var("GST_PLUGIN_SYSTEM_PATH_1_0", "/usr/lib64/gstreamer-1.0") };
     }
 
-    for (k, v) in [
-        ("WEBKIT_DISABLE_SANDBOX", "1"),
-        ("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1"),
-    ] {
-        unsafe { std::env::set_var(k, v) };
-    }
+    // Keep WebKitGTK sandbox on. Disabling it (WEBKIT_DISABLE_SANDBOX*) is
+    // dangerous and must not be the default. If Unity WebAudio is muted under
+    // the sandbox, prefer mute-with-sandbox over re-enabling sandbox-off.
 
     if let Ok(dir) = std::env::var("XDG_RUNTIME_DIR") {
         let pulse = format!("{dir}/pulse/native");
