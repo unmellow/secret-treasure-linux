@@ -2,7 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT/public/game"
-PORT="${PORT:-8765}"
+PORT="${PORT:-19996}"
 if command -v xdg-open >/dev/null; then
   (sleep 0.4; xdg-open "http://127.0.0.1:${PORT}/") >/dev/null 2>&1 &
 fi
