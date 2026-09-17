@@ -73,6 +73,18 @@ print("clicks.js count:", names.count("clicks.js"))
 PY
 
 echo "Built $OUT ($(wc -c < "$OUT") bytes)"
+
+# Same polyglot bytes: dual-ship .com + .exe for Windows PE path (or tell
+# users to rename .com -> .exe). ReactOS rename is unsupported / wontfix.
+if [[ "$OUT" == *.com ]]; then
+  EXE="${OUT%.com}.exe"
+  cp -f "$OUT" "$EXE"
+  chmod +x "$EXE"
+  echo "Also wrote $EXE (identical bytes; Windows prefers .exe)"
+fi
+
 echo
-echo "Linux:  chmod +x $OUT && sh $OUT"
-echo "Listens on http://127.0.0.1:19996/"
+echo "Linux:   ./ape/secret-treasure   # or: sh $OUT   # or: sh $OUT --assimilate"
+echo "Windows: ./ape/secret-treasure.cmd  (prefers .exe, else .com)"
+echo "         Ship both .exe and .com, or rename .com -> .exe"
+echo "Listens on http://127.0.0.1:19996/ (reuses port if already up)"

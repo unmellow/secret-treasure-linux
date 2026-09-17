@@ -1,3 +1,7 @@
 src-tauri/target/
 **/*.rs.bk
 .DS_Store
+
+# Built APE polyglots (rebuild via ape/build-ape.sh; ship on releases)
+ape/secret-treasure.com
+ape/secret-treasure.exe
