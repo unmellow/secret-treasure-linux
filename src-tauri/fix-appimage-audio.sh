@@ -42,8 +42,7 @@ snippet = """# host audio: do not use empty bundled GStreamer dir
 unset GST_PLUGIN_SYSTEM_PATH GST_PLUGIN_SYSTEM_PATH_1_0
 unset GST_PLUGIN_PATH GST_PLUGIN_PATH_1_0
 unset GST_PLUGIN_SCANNER GST_PLUGIN_SCANNER_1_0
-export WEBKIT_DISABLE_SANDBOX=1
-export WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+# Keep WebKitGTK sandbox on (do not export WEBKIT_DISABLE_SANDBOX*).
 if [ -d /usr/lib/gstreamer-1.0 ]; then
   export GST_PLUGIN_SYSTEM_PATH_1_0=/usr/lib/gstreamer-1.0
 elif [ -d /usr/lib64/gstreamer-1.0 ]; then
